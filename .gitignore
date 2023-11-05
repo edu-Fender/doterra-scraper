@@ -1,0 +1,13 @@
+tests/*
+templates/*
+images/*
+others/*
+__pycache__/*
+components/__pycache__/*
+.idea/*
+.pytest_cahe/*
+.vscode/*
+logfile.log
+junk
+test.py
+logfile.txt
