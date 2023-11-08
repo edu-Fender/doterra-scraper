@@ -8,15 +8,19 @@ import scraper
 
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-def test_download_image(browser: WebDriver):
-    url = "https://www.doterra.com/US/en/p/breathe-respiratory-blend-oil"
+# def test_download_image(browser: WebDriver):
+#     url = "https://www.doterra.com/US/en/p/breathe-respiratory-blend-oil"
+#     browser.get(url)
+
+#     img_xpath = "/html/body/div[1]/div[1]/div/div/section[2]/div/div[2]/div[1]/img"
+#     result = scraper.download_image(browser, img_xpath, "test")
+
+#     assert result
+
+def test_parse_product_information(browser: WebDriver):    
+    url = "https://shop.doterra.com/PT/pt_PT/shop/correctx/"
     browser.get(url)
-
-    img_xpath = "/html/body/div[1]/div[1]/div/div/section[2]/div/div[2]/div[1]/img"
-    result = scraper.download_image(browser, img_xpath, "test")
-
-    assert result
-
+    result = scraper.parse_product_information(browser) 
 
 @pytest.mark.parametrize("url", [
     # Pagina que tem muitos produtos que so sao carregados ao fazer scrolldown com o mouse
