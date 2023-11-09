@@ -1,6 +1,8 @@
 import os
+import decorator
 import sys
 import json
+import logging
 import urllib.request
 
 from datetime import datetime
@@ -24,7 +26,7 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 __parentpath__ = os.path.realpath(os.path.abspath('.'))
 
 
-def log(*args, console=True, logfile=None) -> None:
+'''def log(*args, console=True, logfile=None) -> None:
     """
     Print message to logfile.txt and console depending on input
     """
@@ -36,7 +38,7 @@ def log(*args, console=True, logfile=None) -> None:
             with open(logfile, 'a+') as f:
                 now = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
                 f.write(f"{now} {args}\n")
-
+'''
 # def download_image(browser: WebDriver, xpath: str, product_name: str) -> str:
 #     """
 #     Helper to make download of images easier
@@ -56,7 +58,7 @@ def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
     Accept bloody cookie
     """
     try:
-        log("Accepting bloody cookie...")
+        logging.info("Accepting bloody cookie...")
         accept_cookie_btn_xpath = '//*[@id="truste-consent-button"]'
         WebDriverWait(browser, 10).until(
             EC.visibility_of_element_located ((
@@ -66,7 +68,7 @@ def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
     
     # For some reason sadly Python wont catch TimeoutException in this case
     except:
-        log("Error, couldn't accept bloody cookie")
+        logging.error("Error, couldn't accept bloody cookie")
         raise SystemExit
 
 def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement] = "") -> bool:
@@ -78,11 +80,11 @@ def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement] =
         webelement: WebElement = WebDriverWait(browser, 5).until(
             EC.visibility_of_element_located ((
                 By.XPATH, xpath_or_webelement)))
-        log(f"Hovering over element on XPATH {xpath_or_webelement}")
+        logging.info(f"Hovering over element on XPATH {xpath_or_webelement}")
 
     elif isinstance(xpath_or_webelement, WebElement):
         webelement = xpath_or_webelement
-        log(f"Hovering over element {xpath_or_webelement.tag_name}")
+        logging.info(f"Hovering over element {xpath_or_webelement.tag_name}")
 
     else:
         raise NotImplementedError(f"Error: Hit a never type.")
@@ -102,9 +104,23 @@ def wait_for_element(browser: WebDriver, by_what: str, direction: str, timeout: 
     
     return element
 
-def kill_edge() -> None:
-    # Terminating Edge processes with each code execution.
-    # This is necessary because if there is an Edge process alive when Edge is opened by Selenium, Selenium will not work correctly
-    cmd = 'taskkill /im msedge.exe /t /f'
-    log(f"Killing edge: {cmd}")
-    os.system(cmd)
+def kill_edge(func):
+    """
+    Decorator that will terminate Edge processes with each code execution.
+    This is necessary because if there is an Edge process alive when Edge is opened by Selenium, Selenium will not work correctly
+    """
+    def wrapper(func, *args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            cmds = [
+                "taskkill /im msedge.exe /t /f",
+                "taskkill /im msedgedriver.exe /t /f",
+                "taskkill /im microsoftwebdriver.exe /t /f"
+            ]
+                
+            for cmd in cmds:
+                logging.debug(f"Sending command: {cmd}")
+                os.system(cmd)
+
+    return decorator.decorator(wrapper, func)

@@ -1,11 +1,12 @@
-import csv
 import re
 import os
+import csv
 import time
 import json
-import asyncio
-import traceback
 import typing
+import asyncio
+import logging
+import traceback
 import urllib.request
 
 from typing import Dict, List, TypeVar, TypedDict, Union
@@ -21,7 +22,8 @@ from selenium.webdriver.remote.webelement import WebElement
 from sympy import Product
 
 from components.models import Information, Benefits, Ingredients, Uses, Product
-from components.utils import log, accept_bloody_cookie, hover_over, wait_for_element, kill_edge
+from components.utils import accept_bloody_cookie, hover_over, wait_for_element, kill_edge
+
 
 # Most efective way to get currerent script location
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -39,8 +41,8 @@ OPTIONS = [
 # URL doTERRA website
 URL = "https://shop.doterra.com/PT/pt_PT/shop/home/"
 
-# Delay do scroll do mouse em segundo
-SCROLL_PAUSE_DELAY = 1.0
+# Mouse scroll delay in seconds
+SCROLL_PAUSE_DELAY = 2.0
 
 # Categorias que estao sendo processadas
 CONTEXT_CATEGORIES = ["Cuidado Pessoal", "MetaPWR™", "Suplementos"]
@@ -48,16 +50,24 @@ CONTEXT_CATEGORIES = ["Cuidado Pessoal", "MetaPWR™", "Suplementos"]
 # Buffer das categorias que ja foram abertas
 OPENED_SUBCATEGORIES = []
 
+# Timeout
 TIMEOUT = 5
-LOGFILE = f"./logs/LOG_{datetime.now().strftime('%d%m%Y%H%M%S')}.txt"
-# LOGFILE = ""
 
+log = logging.getLogger("scraper")
+logging.basicConfig(
+    filename=f"./logs/SCRAPER_{datetime.now().strftime('%d-%m-%Y_%H.%M.%S')}.log", 
+    filemode='w+',
+    format="%(asctime)s - %(message)s",
+    datefmt="%d-%m-%Y %H:%M:%S",
+    encoding='utf-8', 
+    level=logging.INFO
+)
 
 def get_browser(options: List[str]) -> WebDriver:
     """
     Will get then return the Selenium driver
     """
-    log(f"Getting browser object with custom options: {json.dumps(options, indent=4)}", logfile=LOGFILE)
+    log.info(f"Getting browser object with custom options: {json.dumps(options, indent=4)}")
     
     edge_options = Options()
     for i in options:
@@ -65,6 +75,7 @@ def get_browser(options: List[str]) -> WebDriver:
     
     service = Service(os.path.join(__location__, "components/msedgedriver.exe"))
     browser = webdriver.Edge(service=service, options=edge_options)
+    browser.implicitly_wait(TIMEOUT)  # Timeout
 
     return browser
 
@@ -83,6 +94,8 @@ def parser_helper(browser: WebDriver, box: T) -> T:
     """
     Help parsing the pages
     """
+    log.info(f"Entered the parser helper...")
+
     for element_name in box.keys():
         element_dict = box[element_name]
         element_dict_keys = element_dict.keys()
@@ -94,17 +107,18 @@ def parser_helper(browser: WebDriver, box: T) -> T:
         elif "xpath" in element_dict_keys:
             element = wait_for_element(browser, By.XPATH, element_dict["xpath"], TIMEOUT)
         else:
-            log("Error: hit a never type.", logfile=LOGFILE)
+            log.error("Error: hit a never type.")
             raise SystemExit
         
         if element.tag_name == "ul":
             lis = element.find_elements(By.XPATH, "./li")
             # repr will convert unicoded chars into their nice printable versions
-            box[element_name]["text"] = [repr(li.text) + '\n' for li in lis]
+            string = [repr(li.text) + '\n' for li in lis]            
+            box[element_name]["text"] = string
         else:
             box[element_name]["text"] = repr(element.text)
     
-    log(f"Parsed product {type(box)}: {json.dumps(box, indent=4)}", logfile=LOGFILE)
+    log.info(f"Parsed product: {json.dumps(box, indent=4)}")
 
     return box
 
@@ -119,55 +133,57 @@ def parse_product_uses(browser: WebDriver):
     """
     Parse the product utilization information
     """ 
-    log(f"Parsing product utilization information from product webpage: {browser.current_url}", logfile=LOGFILE)
+    log.info(f"Parsing product utilization information from product webpage: {browser.current_url}")
 
     utilization_box: Uses = {
         "uses_title": {
-            "field_name": "product_uses_title",
+            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/h3[1]/span',
             "text": ""
         },
         "uses": {
-            "class_name": "custom-list",
+            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[1]/ul',
             "text": ""
         },
         "instructions_title": {
-            "field_name": "product_uses_directions_title",
+            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/h3[2]/span',
             "text": ""
         },
         "instructions": {
-            "field_name": "product_uses_directions_text1",
+            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[2]/div/div[2]/span',
             "text": ""
         },
         "cautions_title": {
-            "class_name": "product_uses_cautions_title",
+            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[3]/h3/span',
             "text": ""
         },
         "cautions": {
-            "class_name": "product_uses_cautions_text",
+            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[3]/div/p/span',
             "text": ""
         },
     }
 
-    return parser_helper(browser, utilization_box)
+    new_utilization_box = parser_helper(browser, utilization_box)
+    return new_utilization_box
 
 def parse_product_ingredients(browser: WebDriver):
     """
     Parse the product ingredients information
     """
-    log(f"Parsing ingredients information from product webpage: {browser.current_url}", logfile=LOGFILE)
+    log.info(f"Parsing ingredients information from product webpage: {browser.current_url}")
 
     ingredients_box: Ingredients = {
         "ingredients_title": {
-            "class_name": '//*[@id="WhatsInsideSection"]/div/div[2]/div/h3/span',
+            "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/h3/span',
             "text": ""
         },
         "ingredients": {
-            "class_name": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
+            "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
             "text": ""
         }
     }
 
-    return parser_helper(browser, ingredients_box)
+    new_ingredients_box = parser_helper(browser, ingredients_box)
+    return new_ingredients_box
 
 def parse_product_benefits(browser: WebDriver):
     """
@@ -176,22 +192,23 @@ def parse_product_benefits(browser: WebDriver):
 
     benefits_box: Benefits = {
         "benefits_title": {
-            "class_name": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
             "text": ""
         },
         "benefits": {
-            "class_name": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
             "text": ""
         }
     }
 
-    return parser_helper(browser, benefits_box)
+    new_benefits_box = parser_helper(browser, benefits_box)
+    return new_benefits_box
         
 def parse_product_information(browser: WebDriver):
     """
     Parse the product main information
     """
-    log(f"Parsing main information from product webpage: {browser.current_url}", logfile=LOGFILE)
+    log.info(f"Parsing main information from product webpage: {browser.current_url}")
 
     information_box: Information = {
         "product_name": {
@@ -220,13 +237,14 @@ def parse_product_information(browser: WebDriver):
         }
     }
 
-    return parser_helper(browser, information_box)
+    new_information_box = parser_helper(browser, information_box)
+    return new_information_box
     
 def parse_product(browser: WebDriver) -> Product:
     """
     Parse all product information and images from product page
     """
-    log(f"Parsing information from product webpage: {browser.current_url}", logfile=LOGFILE)
+    log.info(f"Parsing information from product webpage: {browser.current_url}")
     
     utilization_box = parse_product_information(browser)
     ingredients_box = parse_product_benefits(browser)
@@ -248,7 +266,8 @@ def process_products_page(browser: WebDriver):
     """
     Handle all the products present on subcategory products page
     """
-    log("", logfile=LOGFILE)
+    log.info("Processing products page...")
+    
     # ============================== Scrolando para baixo para carregar os produtos ============================== 
     # Get scroll height
     original_height = browser.execute_script("return document.body.scrollHeight")
@@ -283,7 +302,7 @@ def handle_hover_menu(browser: WebDriver):
     Handles interaction with hover type menu to get the categories, then the subcategories, then the products
     """
     try:
-        log("Handling hover menu 'COMPRAR'", logfile=LOGFILE)
+        log.info("Handling hover menu 'COMPRAR'")
         # ===================================== Passando o mouse no botão "comprar" =====================================
         comprar_btn_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/a/span'
         hover_over(browser, comprar_btn_xpath)
@@ -323,14 +342,14 @@ def handle_hover_menu(browser: WebDriver):
     except ZeroDivisionError:
         pass
     
+@kill_edge
 def main():
     """
     Another main function
     """
+    log.info("Starting script...")
+
     try:
-        log("Starting script...", logfile=LOGFILE)
-        
-        log("Inicializando instancia...", logfile=LOGFILE)
         browser = get_browser(OPTIONS)
         browser.implicitly_wait(30)  # Timeout
 
@@ -343,12 +362,11 @@ def main():
     
     except ZeroDivisionError:
         pass
+    except SystemExit:
+        raise SystemExit
     except Exception:
-        log(f"Unexpected error: {traceback.format_exc()}", logfile=LOGFILE)
+        log.error(f"Unexpected error: {traceback.format_exc()}")
         return False
-    finally:
-        log("Finishing execution...", logfile=LOGFILE)
-        kill_edge()
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':

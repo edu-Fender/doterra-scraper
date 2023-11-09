@@ -5,9 +5,8 @@ import pytest
 
 from selenium.webdriver.edge.webdriver import WebDriver
 
-# Little dirty trick
-sys.path.append("..")
-from scraper import accept_bloody_cookie, get_browser, main
+from scraper import accept_bloody_cookie, get_browser
+from components.utils import kill_edge
 
 
 OPTIONS = [
@@ -21,8 +20,10 @@ OPTIONS = [
 
 @pytest.fixture()
 def browser() -> WebDriver:
+    """
+    Get Selenium WebBrowser object
+    """
     browser = get_browser(OPTIONS)
-    browser.implicitly_wait(30)  # Timeout
 
     url = "https://shop.doterra.com/PT/pt_PT"
     browser.get(url)
