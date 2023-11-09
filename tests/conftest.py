@@ -12,8 +12,8 @@ from scraper import accept_bloody_cookie, get_browser, main
 
 OPTIONS = [
     # "--user-data-dir=C:\\Users\\anewe\\AppData\\Local\\Microsoft\\Edge\\User Data",
-    "--headless",
-    "--inprivate",
+    # "--headless",
+    # "--inprivate",
     "--start-maximized",
     "--disable-extensions",
     "--remote-debugging-port=9222"
@@ -27,9 +27,6 @@ def browser() -> WebDriver:
     url = "https://shop.doterra.com/PT/pt_PT"
     browser.get(url)
 
-    try:
-        browser = accept_bloody_cookie(browser)
-    except:
-        pass
+    browser = accept_bloody_cookie(browser)
 
     return browser

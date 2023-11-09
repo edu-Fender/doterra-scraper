@@ -1,3 +1,4 @@
+import csv
 import re
 import os
 import time
@@ -7,17 +8,12 @@ import traceback
 import typing
 import urllib.request
 
-from typing import Dict, List, TypedDict, Union
+from typing import Dict, List, TypeVar, TypedDict, Union
 from datetime import datetime
-from numpy import cast
+from numpy import cast, product
 
-from selenium import webdriver  # selenium 4.8.3
-from selenium.webdriver import ActionChains
-from selenium.common.exceptions import TimeoutException
-from selenium.common.exceptions import WebDriverException
+from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.webdriver import WebDriver
@@ -25,15 +21,15 @@ from selenium.webdriver.remote.webelement import WebElement
 from sympy import Product
 
 from components.models import Information, Benefits, Ingredients, Uses, Product
-from components.utils import accept_bloody_cookie,  hover_over, kill_edge, log, wait_for_element
+from components.utils import log, accept_bloody_cookie, hover_over, wait_for_element, kill_edge
 
-
+# Most efective way to get currerent script location
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 # Browser options
 OPTIONS = [
     # "--user-data-dir=C:\\Users\\anewe\\AppData\\Local\\Microsoft\\Edge\\User Data",
-    "--headless",
+    # "--headless",
     "--inprivate",
     "--start-maximized",
     "--disable-extensions",
@@ -52,7 +48,9 @@ CONTEXT_CATEGORIES = ["Cuidado Pessoal", "MetaPWR™", "Suplementos"]
 # Buffer das categorias que ja foram abertas
 OPENED_SUBCATEGORIES = []
 
+TIMEOUT = 5
 LOGFILE = f"./logs/LOG_{datetime.now().strftime('%d%m%Y%H%M%S')}.txt"
+# LOGFILE = ""
 
 
 def get_browser(options: List[str]) -> WebDriver:
@@ -70,11 +68,52 @@ def get_browser(options: List[str]) -> WebDriver:
 
     return browser
 
-def get_all_images(browser: WebDriver):
+
+def write_csv(product: Product):
     """
-    Get and download all images from webpage
+    Write CSV with product information
     """
-    pass
+    template_csv = os.path.join(__location__, "Produtos doterra - Produtos.csv")
+    csv_reader = csv.reader(template_csv)
+
+# Introducing: Generics
+T = TypeVar('T', Information, Benefits, Ingredients, Uses)
+
+def parser_helper(browser: WebDriver, box: T) -> T:
+    """
+    Help parsing the pages
+    """
+    for element_name in box.keys():
+        element_dict = box[element_name]
+        element_dict_keys = element_dict.keys()
+
+        if "class_name" in element_dict_keys:
+            element = wait_for_element(browser, By.CLASS_NAME, element_dict["class_name"], TIMEOUT)
+        elif "field_name" in element_dict_keys:
+            element = wait_for_element(browser, By.NAME, element_dict["field_name"], TIMEOUT)
+        elif "xpath" in element_dict_keys:
+            element = wait_for_element(browser, By.XPATH, element_dict["xpath"], TIMEOUT)
+        else:
+            log("Error: hit a never type.", logfile=LOGFILE)
+            raise SystemExit
+        
+        if element.tag_name == "ul":
+            lis = element.find_elements(By.XPATH, "./li")
+            # repr will convert unicoded chars into their nice printable versions
+            box[element_name]["text"] = [repr(li.text) + '\n' for li in lis]
+        else:
+            box[element_name]["text"] = repr(element.text)
+    
+    log(f"Parsed product {type(box)}: {json.dumps(box, indent=4)}", logfile=LOGFILE)
+
+    return box
+
+def parse_product_images(browser: WebDriver) -> List[WebElement]:
+    """
+    Get and download all images from product webpage
+    """
+    images: List[WebElement] = browser.find_elements(By.CSS_SELECTOR, "img")
+    return images
 
 def parse_product_uses(browser: WebDriver):
     """
@@ -84,37 +123,33 @@ def parse_product_uses(browser: WebDriver):
 
     utilization_box: Uses = {
         "uses_title": {
-            "type": "span",
             "field_name": "product_uses_title",
             "text": ""
         },
         "uses": {
-            "type": "ul",
             "class_name": "custom-list",
             "text": ""
         },
         "instructions_title": {
-            "type": "span",
             "field_name": "product_uses_directions_title",
             "text": ""
         },
         "instructions": {
-            "type": "span",
             "field_name": "product_uses_directions_text1",
             "text": ""
         },
         "cautions_title": {
-            "type": "span",
             "class_name": "product_uses_cautions_title",
             "text": ""
         },
         "cautions": {
-            "type": "span",
             "class_name": "product_uses_cautions_text",
             "text": ""
         },
     }
-        
+
+    return parser_helper(browser, utilization_box)
+
 def parse_product_ingredients(browser: WebDriver):
     """
     Parse the product ingredients information
@@ -123,106 +158,93 @@ def parse_product_ingredients(browser: WebDriver):
 
     ingredients_box: Ingredients = {
         "ingredients_title": {
-            "type": "h3",
-            "class_name": "product-whats-inside__footer-title",
+            "class_name": '//*[@id="WhatsInsideSection"]/div/div[2]/div/h3/span',
             "text": ""
         },
         "ingredients": {
-            "type": "div",
-            "class_name": "product-whats-inside__footer-content",
+            "class_name": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
             "text": ""
         }
     }
 
+    return parser_helper(browser, ingredients_box)
 
 def parse_product_benefits(browser: WebDriver):
     """
     Parse the product benefits information
     """
-    log(f"Parsing benefits information from product webpage: {browser.current_url}", logfile=LOGFILE)
 
     benefits_box: Benefits = {
         "benefits_title": {
-            "type": "h3",
-            "class_name": "spotlight__foot-block-title",
+            "class_name": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
             "text": ""
         },
         "benefits": {
-            "type": "ul",
-            "class_name": "spotlight__list-custom custom-list",
+            "class_name": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
             "text": ""
         }
     }
+
+    return parser_helper(browser, benefits_box)
         
 def parse_product_information(browser: WebDriver):
     """
     Parse the product main information
     """
     log(f"Parsing main information from product webpage: {browser.current_url}", logfile=LOGFILE)
-    # product_name_xpath  = '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/h3[1]/span'
-    # product_info_div_xpath = '//*[@id="ProductSpotlightSection"]/div/div/div/div[3]/div'
 
     information_box: Information = {
         "product_name": {
-            "type": "h3",
-            "class_name": "spotlight__head-title",
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/h3/span',
             "text": ""
         },
         "description": {
-            "type": "div",
-            "class_name": "spotlight__head-copy",
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/div[1]/p/span',
             "text": ""
         },
         "dimensions": {
-            "type": "div",
-            "class_name": "loyalty-order__row loyalty-order__row--size",
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[1]/div/div[2]/span',
             "text": ""
         },
         "item_id": {
-            "type": "div",
-            "class_name": "loyalty-order__row loyalty-order__row--item",
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[2]/div/div[2]',
             "text": ""
         },
         "retail_price": {
-            "type": "div",
-            "class_name": "loyalty-order__row loyalty-order__row--wholesale",
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
             "text": ""
         },
         "discount_price": {
-            "type": "span",
-            "class_name": "loyalty-order__row loyalty-order__row--retail",
+            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
             "text": ""
-        },
-        "images": []
+        }
     }
 
-    for element_name, element_dict in information_box.items():
-        field_names = element_dict.keys()
-        
-        if "class_name" in field_names:
-            # element = browser.find_element(By.CLASS_NAME, element_dict["class_name"])
-            element = wait_for_element(browser, By.XPATH, element_dict["class_name"])
-        
-        elif "field_name" in field_names:
-            element = browser.find_element(By.NAME, element_dict["field_name"])
-        elif "xpath" in field_names:
-            element = browser.find_element(By.XPATH, element_dict["xpath_name"])
-        else:
-            log("Error: hit a never type.", logfile=LOGFILE)
-            return False
-
-        information_box[element_name]["text"] = element.text
+    return parser_helper(browser, information_box)
     
-    return
-
-def parse_product(browser: WebDriver):
+def parse_product(browser: WebDriver) -> Product:
     """
     Parse all product information and images from product page
     """
     log(f"Parsing information from product webpage: {browser.current_url}", logfile=LOGFILE)
-    parse_product_information(browser)
+    
+    utilization_box = parse_product_information(browser)
+    ingredients_box = parse_product_benefits(browser)
+    benefits_box = parse_product_ingredients(browser)
+    information_box = parse_product_uses(browser)
+    images = parse_product_images(browser)
 
-def process_subcategory_products_page(browser: WebDriver):
+    product: Product = { 
+        "information": utilization_box,
+        "benefits": ingredients_box,
+        "ingredients": benefits_box,
+        "uses": information_box,
+        "images": images
+    }
+
+    return product
+
+def process_products_page(browser: WebDriver):
     """
     Handle all the products present on subcategory products page
     """
@@ -290,7 +312,7 @@ def handle_hover_menu(browser: WebDriver):
                             subcategory_li.click()
 
                             # Chama a funcao pra parsear a pagina da subcategoria atual
-                            process_subcategory_products_page(browser)
+                            process_products_page(browser)
 
                             # Aplicando recursao
                             handle_hover_menu(browser)

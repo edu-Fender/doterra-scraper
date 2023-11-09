@@ -7,7 +7,6 @@ from typing_extensions import NotRequired
 
 ############################## Base Classes ##############################
 class HTMLElement(TypedDict):
-    type: str
     text: str
     
 class HTMLElementFromClassName(HTMLElement):
@@ -30,7 +29,6 @@ class Information(TypedDict):
     item_id: HTMLElement
     retail_price: HTMLElement
     discount_price: HTMLElement
-    images: List[HTMLElement]
 
 class Benefits(TypedDict):
     benefits_title: HTMLElement
@@ -48,9 +46,13 @@ class Uses(TypedDict):
     cautions_title: HTMLElement
     cautions: HTMLElement
 
+class Images(TypedDict):
+    images: List[HTMLElement]
+
 # The Megazord
 class Product(TypedDict):
     information: Information
     benefits: Benefits
     ingredients: Ingredients
     uses: Uses
+    images: Images
