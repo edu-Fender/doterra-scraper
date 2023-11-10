@@ -3,6 +3,7 @@ import os
 import csv
 import time
 import json
+import queue
 import typing
 import asyncio
 import logging
@@ -19,10 +20,19 @@ from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from sympy import Product
+
+from selenium import webdriver
+from selenium.webdriver import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.edge.options import Options
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.edge.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 
 from components.models import Information, Benefits, Ingredients, Uses, Product
-from components.utils import accept_bloody_cookie, hover_over, wait_for_element, kill_edge
+from components.utils import accept_bloody_cookie, hover_over, wait_for_element, wait_for_all_elements, kill_edge
 
 
 # Most efective way to get currerent script location
@@ -47,17 +57,18 @@ SCROLL_PAUSE_DELAY = 2.0
 # Categorias que estao sendo processadas
 CONTEXT_CATEGORIES = ["Cuidado Pessoal", "MetaPWR™", "Suplementos"]
 
-# Buffer das categorias que ja foram abertas
-OPENED_SUBCATEGORIES = []
+# Subcategories queue will be very iuseful for async interactions
+OPENED_SUBCATEGORIES: List[str] = []
 
 # Timeout
 TIMEOUT = 5
 
 log = logging.getLogger("scraper")
 logging.basicConfig(
-    filename=f"./logs/SCRAPER_{datetime.now().strftime('%d-%m-%Y_%H.%M.%S')}.log", 
+    # filename=f"./logs/SCRAPER_{datetime.now().strftime('%d-%m-%Y_%H.%M.%S')}.log", 
+    filename=f"./logs/SCRAPER.log", # HACK 
     filemode='w+',
-    format="%(asctime)s - %(message)s",
+    format="%(asctime)s - %(levelname)s: %(message)s",
     datefmt="%d-%m-%Y %H:%M:%S",
     encoding='utf-8', 
     level=logging.INFO
@@ -107,7 +118,7 @@ def parser_helper(browser: WebDriver, box: T) -> T:
         elif "xpath" in element_dict_keys:
             element = wait_for_element(browser, By.XPATH, element_dict["xpath"], TIMEOUT)
         else:
-            log.error("Error: hit a never type.")
+            log.error("Hit a never type.")
             raise SystemExit
         
         if element.tag_name == "ul":
@@ -122,12 +133,34 @@ def parser_helper(browser: WebDriver, box: T) -> T:
 
     return box
 
-def parse_product_images(browser: WebDriver) -> List[WebElement]:
+def download_product_images(browser: WebDriver, product_name: str) -> None:
     """
     Get and download all images from product webpage
     """
-    images: List[WebElement] = browser.find_elements(By.CSS_SELECTOR, "img")
-    return images
+    log.info("Downloading product images...")
+    
+    # Getting images
+    images: List[WebElement] = wait_for_all_elements(browser, By.XPATH, "//img")
+
+    # Creating directory with name of product only if it doesnt already exists
+    try:
+        os.mkdir(product_name) 
+    except FileExistsError :
+        pass
+
+    for image in images:
+        image_src = image.get_attribute("src")
+
+        # Get new string containing the text that comes after last slash of image_src
+        image_local_name = re.findall(r"\/([^\/]*)$", image_src)[0]
+        image_local_name = os.path.join(f"./generated/images/{image_local_name}/", image_src)
+
+        # Downloadinbg image
+        path, response = urllib.request.urlretrieve(image_src, image_local_name)
+        
+        if not path:
+            log.warning(f"Image [{image_src}] couldn't be downloaded.")
+
 
 def parse_product_uses(browser: WebDriver):
     """
@@ -246,18 +279,18 @@ def parse_product(browser: WebDriver) -> Product:
     """
     log.info(f"Parsing information from product webpage: {browser.current_url}")
     
-    utilization_box = parse_product_information(browser)
-    ingredients_box = parse_product_benefits(browser)
-    benefits_box = parse_product_ingredients(browser)
-    information_box = parse_product_uses(browser)
-    images = parse_product_images(browser)
+    information_box = parse_product_information(browser)
+    benefits_box = parse_product_benefits(browser)
+    ingredients_box = parse_product_ingredients(browser)
+    uses_box = parse_product_uses(browser)
+    
+    status = download_product_images(browser, information_box["product_name"])
 
     product: Product = { 
-        "information": utilization_box,
-        "benefits": ingredients_box,
-        "ingredients": benefits_box,
-        "uses": information_box,
-        "images": images
+        "information": information_box,
+        "benefits": benefits_box,
+        "ingredients": ingredients_box,
+        "uses": uses_box
     }
 
     return product
@@ -289,8 +322,8 @@ def process_products_page(browser: WebDriver):
     browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
     products_div_xpath = '//*[@id="categoryitemgrid"]'
-    products_div: WebElement = browser.find_element(By.XPATH, products_div_xpath)
-    products: List[WebElement] = products_div.find_elements(By.XPATH, "./div/a")
+    products_div: WebElement = wait_for_element(browser, By.XPATH, products_div_xpath)
+    products: List[WebElement] = wait_for_all_elements(products_div, By.XPATH, "./div/a")
     
     # TODO: criar logica async para parsear a pagina de produtos
     for product in products:
@@ -309,15 +342,12 @@ def handle_hover_menu(browser: WebDriver):
 
         # ===================================== Passando o mouse nas diferentes categorias =====================================
         categories_div_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/div/div/div/div/div/div[2]/div/ul'
-        categories_div: WebElement = browser.find_element(By.XPATH, categories_div_xpath)
-        
-        # "lis" stands for: "li" -> HTML element li (List Item); "s" -> plural of li
-        categories_lis: List[WebElement] = categories_div.find_elements(By.XPATH, "./li")
+        categories_div: WebElement = wait_for_element(browser, By.XPATH, categories_div_xpath)
+        categories_lis: List[WebElement] = wait_for_all_elements(categories_div, By.XPATH, "./li") # "lis" stands for "List ItemS" 
 
         for category_li in categories_lis:
             if category_li.text in CONTEXT_CATEGORIES:
                 hover_over(browser, category_li)
-                # subcategories_ul_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/div/div/div/div/div/div[2]/div/ul/li[3]/ul'
                 subcategories_lis: list[WebElement] = category_li.find_elements(By.XPATH, "./ul/li")
 
                 for subcategory_li in subcategories_lis:
@@ -336,7 +366,7 @@ def handle_hover_menu(browser: WebDriver):
                             # Aplicando recursao
                             handle_hover_menu(browser)
                     else:
-                        # Se o li nao tem texto, e porque esta vazio
+                        # If subcategory_li.text is empty then skip it
                         continue
 
     except ZeroDivisionError:
@@ -365,7 +395,7 @@ def main():
     except SystemExit:
         raise SystemExit
     except Exception:
-        log.error(f"Unexpected error: {traceback.format_exc()}")
+        log.error(f"Unhandled error: {traceback.format_exc()}")
         return False
 
 # Press the green button in the gutter to run the script.

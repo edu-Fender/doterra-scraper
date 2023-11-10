@@ -8,15 +8,13 @@ from components.utils import kill_edge
 
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-# @kill_edge
-# def test_download_image(browser: WebDriver):
-#     url = "https://www.doterra.com/US/en/p/breathe-respiratory-blend-oil"
-#     browser.get(url)
-
-#     img_xpath = "/html/body/div[1]/div[1]/div/div/section[2]/div/div[2]/div[1]/img"
-#     result = scraper.download_image(BROWSER, img_xpath, "test")
-
-#     assert result
+@kill_edge
+def test_download_product_images(browser: WebDriver):
+    url = "https://shop.doterra.com/PT/pt_PT/shop/correctx/"
+    browser.get(url)
+    product_name = "Pomada Essencial Correct-X™"
+    result = scraper.download_product_images(browser, product_name)
+    assert result
 
 @kill_edge
 def test_parse_product_information(browser: WebDriver):    

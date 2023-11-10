@@ -26,32 +26,19 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 __parentpath__ = os.path.realpath(os.path.abspath('.'))
 
 
-'''def log(*args, console=True, logfile=None) -> None:
+def download_image(browser: WebDriver, xpath: str, product_name: str) -> str:
     """
-    Print message to logfile.txt and console depending on input
+    Helper to make download of images easier
     """
-    args = str(*args)
-    if args:
-        if console:
-            print(args)
-        if logfile:
-            with open(logfile, 'a+') as f:
-                now = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
-                f.write(f"{now} {args}\n")
-'''
-# def download_image(browser: WebDriver, xpath: str, product_name: str) -> str:
-#     """
-#     Helper to make download of images easier
-#     """
-#     element = browser.find_element(
-#         By.XPATH,
-#         xpath
-#     )
+    element = browser.find_element(
+        By.XPATH,
+        xpath
+    )
 
-#     img_src = element.get_attribute("src")
-#     path, _ = urllib.request.urlretrieve(img_src, os.path.join(os.path.join(__parentpath__, "images"),  product_name + ".png"))
+    img_src = element.get_attribute("src")
+    path, _ = urllib.request.urlretrieve(img_src, os.path.join(os.path.join(__parentpath__, "images"),  product_name + ".png"))
 
-#     return path
+    return path
 
 def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
     """
@@ -71,15 +58,13 @@ def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
         logging.error("Error, couldn't accept bloody cookie")
         raise SystemExit
 
-def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement] = "") -> bool:
+def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement] = "", timeout: int = 5) -> bool:
     """
     Hover mouse pointer over HTML element
     """
     # Introducing: Type Guards
     if isinstance(xpath_or_webelement, str):
-        webelement: WebElement = WebDriverWait(browser, 5).until(
-            EC.visibility_of_element_located ((
-                By.XPATH, xpath_or_webelement)))
+        webelement: WebElement = wait_for_element(browser, By.XPATH, xpath_or_webelement)
         logging.info(f"Hovering over element on XPATH {xpath_or_webelement}")
 
     elif isinstance(xpath_or_webelement, WebElement):
@@ -87,22 +72,39 @@ def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement] =
         logging.info(f"Hovering over element {xpath_or_webelement.tag_name}")
 
     else:
-        raise NotImplementedError(f"Error: Hit a never type.")
+        logging.error("Hit a never type.")
+        raise SystemExit
 
     hover = ActionChains(browser).move_to_element(webelement)
     hover.perform()
 
     return True
  
-def wait_for_element(browser: WebDriver, by_what: str, direction: str, timeout: int = 5):
+def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: int = 5):
     """
-    Helper function to wait for visibility of element located
+    Helper function to wait for visibility of element located then grab it
+    Note that 'browser' could be a WebDriver or a WebElement as both of then has find_element attribute
     """
     element = WebDriverWait(browser, timeout).until(
         EC.visibility_of_element_located ((
             by_what, direction)))
     
     return element
+
+def wait_for_all_elements(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: int = 5) -> List[WebElement]:
+    """
+    Helper function to wait for visibility of all elements located then grab it
+    Note that 'browser' could be a WebDriver or a WebElement as both of then has find_elements attribute
+    """
+    # Waiting until all images loaded
+    WebDriverWait(browser, timeout).until(
+        EC.presence_of_all_elements_located ((
+            by_what, direction)))
+    
+    # Getting images
+    elements: List[WebElement] = browser.find_elements(by_what, direction)
+
+    return elements
 
 def kill_edge(func):
     """

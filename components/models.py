@@ -45,14 +45,10 @@ class Uses(TypedDict):
     instructions: HTMLElement
     cautions_title: HTMLElement
     cautions: HTMLElement
-
-class Images(TypedDict):
-    images: List[HTMLElement]
-
+    
 # The Megazord
 class Product(TypedDict):
     information: Information
     benefits: Benefits
     ingredients: Ingredients
     uses: Uses
-    images: Images
