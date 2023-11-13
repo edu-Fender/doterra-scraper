@@ -5,6 +5,7 @@ templates/*
 images/*
 others/*
 logs/*
+generated/*
 __pycache__/*
 */__pycache__/*
 logfile.log

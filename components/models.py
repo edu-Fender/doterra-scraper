@@ -1,50 +1,44 @@
 import os
 from tkinter import X
 
-from typing import List, Dict, Union, TypedDict, Annotated
+from typing import Any, List, NamedTuple, Optional, Sequence, Tuple, Dict, Literal, TypeVar, Union, TypedDict, Annotated
 from typing_extensions import NotRequired
+from dataclasses import dataclass
 
-
-############################## Base Classes ##############################
+############################## Product Base Classes ##############################
 class HTMLElement(TypedDict):
-    text: str
-    
-class HTMLElementFromClassName(HTMLElement):
-    class_name: str
-
-class HTMLElementFromFieldName(HTMLElement):
-    field_name: str
-
-class HTMLElementFromXpath(HTMLElement):
     xpath: str
+    
+class HTMLNormalElement(HTMLElement):
+    text: str
 
-# Type alias
-HTMLElement = Union[HTMLElementFromXpath, HTMLElementFromClassName, HTMLElementFromFieldName]
+class HTMLBulletedElement(HTMLElement):
+    text: List[str]
 
-############################## Actual Clases ##############################
+############################## Product Actual Clases ##############################
 class Information(TypedDict):
-    product_name: HTMLElement
-    description: HTMLElement
-    dimensions: HTMLElement
-    item_id: HTMLElement
-    retail_price: HTMLElement
-    discount_price: HTMLElement
+    product_name: HTMLNormalElement
+    description: HTMLNormalElement
+    dimensions: HTMLNormalElement
+    item_id: HTMLNormalElement
+    retail_price: HTMLNormalElement
+    discount_price: HTMLNormalElement
 
 class Benefits(TypedDict):
-    benefits_title: HTMLElement
-    benefits: HTMLElement
+    benefits_title: HTMLNormalElement
+    benefits: HTMLBulletedElement
 
 class Ingredients(TypedDict):
-    ingredients_title: HTMLElement
-    ingredients: HTMLElement
+    ingredients_title: HTMLNormalElement
+    ingredients: HTMLNormalElement
 
 class Uses(TypedDict):
-    uses_title: HTMLElement
-    uses: HTMLElement
-    instructions_title: HTMLElement
-    instructions: HTMLElement
-    cautions_title: HTMLElement
-    cautions: HTMLElement
+    uses_title: HTMLNormalElement
+    uses: HTMLBulletedElement
+    instructions_title: HTMLNormalElement
+    instructions: HTMLNormalElement
+    cautions_title: HTMLNormalElement
+    cautions: HTMLNormalElement
     
 # The Megazord
 class Product(TypedDict):
@@ -52,3 +46,11 @@ class Product(TypedDict):
     benefits: Benefits
     ingredients: Ingredients
     uses: Uses
+
+############################## Others ##############################
+class NormalizedProduct(TypedDict):
+    product_name: str
+    item_id: str 
+    retail_price: str
+    discount_price: str
+    description: str

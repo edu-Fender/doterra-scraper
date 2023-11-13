@@ -1,291 +1,246 @@
+# -*- coding: latin-1 -*-
 import re
 import os
 import csv
 import time
 import json
-import queue
-import typing
-import asyncio
 import logging
 import traceback
 import urllib.request
 
-from typing import Dict, List, TypeVar, TypedDict, Union
-from datetime import datetime
-from numpy import cast, product
+from typing import List, TypeVar, Union, Sequence
 
-from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 
-from selenium import webdriver
-from selenium.webdriver import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.edge.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.edge.webdriver import WebDriver
-from selenium.webdriver.remote.webelement import WebElement
+from components.models import Information, Benefits, Ingredients, Uses, Product, NormalizedProduct
+from components.utils import accept_bloody_cookie, get_browser, get_logger, hover_over, join_strings, wait_for_element, wait_for_all_elements, kill_edge
+from components.data import INFORMATION, BENEFITS, INGREDIENTS, UTILIZATION
 
-from components.models import Information, Benefits, Ingredients, Uses, Product
-from components.utils import accept_bloody_cookie, hover_over, wait_for_element, wait_for_all_elements, kill_edge
-
-
-# Most efective way to get currerent script location
+# Most efective way to get current script location
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-# Browser options
-OPTIONS = [
-    # "--user-data-dir=C:\\Users\\anewe\\AppData\\Local\\Microsoft\\Edge\\User Data",
-    # "--headless",
-    "--inprivate",
-    "--start-maximized",
-    "--disable-extensions",
-    "--remote-debugging-port=9222"
-]
 
-# URL doTERRA website
-URL = "https://shop.doterra.com/PT/pt_PT/shop/home/"
+# Buffers
+SUBCATEGORIES_BUFF: List[str] = []
+PRODUCTS_BUFF: List[str] = []
 
-# Mouse scroll delay in seconds
+# Constants
+TIMEOUT = 5
 SCROLL_PAUSE_DELAY = 2.0
-
-# Categorias que estao sendo processadas
+GENERATED_CSV_FILE = os.path.join(__location__, "generated", "Produtos doterra - Produtos.csv")
 CONTEXT_CATEGORIES = ["Cuidado Pessoal", "MetaPWR™", "Suplementos"]
 
-# Subcategories queue will be very iuseful for async interactions
-OPENED_SUBCATEGORIES: List[str] = []
 
-# Timeout
-TIMEOUT = 5
+# Getting log object
+log = get_logger(os.path.join(__location__, fr"logs\SCRAPER.log"))
 
-log = logging.getLogger("scraper")
-logging.basicConfig(
-    # filename=f"./logs/SCRAPER_{datetime.now().strftime('%d-%m-%Y_%H.%M.%S')}.log", 
-    filename=f"./logs/SCRAPER.log", # HACK 
-    filemode='w+',
-    format="%(asctime)s - %(levelname)s: %(message)s",
-    datefmt="%d-%m-%Y %H:%M:%S",
-    encoding='utf-8', 
-    level=logging.INFO
-)
-
-def get_browser(options: List[str]) -> WebDriver:
-    """
-    Will get then return the Selenium driver
-    """
-    log.info(f"Getting browser object with custom options: {json.dumps(options, indent=4)}")
-    
-    edge_options = Options()
-    for i in options:
-        edge_options.add_argument(i)
-    
-    service = Service(os.path.join(__location__, "components/msedgedriver.exe"))
-    browser = webdriver.Edge(service=service, options=edge_options)
-    browser.implicitly_wait(TIMEOUT)  # Timeout
-
-    return browser
-
-
-def write_csv(product: Product):
+def write_csv(normalized_product: NormalizedProduct):
     """
     Write CSV with product information
     """
-    template_csv = os.path.join(__location__, "Produtos doterra - Produtos.csv")
-    csv_reader = csv.reader(template_csv)
-
-# Introducing: Generics
-T = TypeVar('T', Information, Benefits, Ingredients, Uses)
-
-def parser_helper(browser: WebDriver, box: T) -> T:
-    """
-    Help parsing the pages
-    """
-    log.info(f"Entered the parser helper...")
-
-    for element_name in box.keys():
-        element_dict = box[element_name]
-        element_dict_keys = element_dict.keys()
-
-        if "class_name" in element_dict_keys:
-            element = wait_for_element(browser, By.CLASS_NAME, element_dict["class_name"], TIMEOUT)
-        elif "field_name" in element_dict_keys:
-            element = wait_for_element(browser, By.NAME, element_dict["field_name"], TIMEOUT)
-        elif "xpath" in element_dict_keys:
-            element = wait_for_element(browser, By.XPATH, element_dict["xpath"], TIMEOUT)
-        else:
-            log.error("Hit a never type.")
-            raise SystemExit
-        
-        if element.tag_name == "ul":
-            lis = element.find_elements(By.XPATH, "./li")
-            # repr will convert unicoded chars into their nice printable versions
-            string = [repr(li.text) + '\n' for li in lis]            
-            box[element_name]["text"] = string
-        else:
-            box[element_name]["text"] = repr(element.text)
+    header: Union[Sequence[str], None]
+    required_fields = [    
+        "Nome",
+        "DescriÃ§Ã£o",
+        "PreÃ§o (imposto incluÃ­do)",
+        "PreÃ§o de custo (atacado)",
+        "ReferÃªncia"
+    ]
     
-    log.info(f"Parsed product: {json.dumps(box, indent=4)}")
+    # Parsing CSV template file
+    template_csv = os.path.join(__location__, "templates", "Produtos doterra - Produtos.csv")
+    with open(template_csv, mode='r', encoding="latin-1") as f:
+        reader = csv.DictReader(f)
+        header = reader.fieldnames
+        
+        # Validating header
+        if not header or any(i not in header for i in required_fields):
+            logging.error(f"Couldn't parse header from CSV: {template_csv}.")
+            raise SystemExit
 
-    return box
+        logging.info(f"Parsed header from CSV '{template_csv}': {json.dumps(header, indent=4)}")
+    
+    # Writing to new CSV file
+    with open(GENERATED_CSV_FILE, mode='a+', encoding="latin-1") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
+        writer.writerow({
+            "Nome": normalized_product["product_name"],
+            "ReferÃªncia": normalized_product["item_id"],
+            "PreÃ§o (imposto incluÃ­do)": normalized_product["retail_price"],
+            "PreÃ§o de custo (atacado)": normalized_product["discount_price"],
+            "DescriÃ§Ã£o": normalized_product["description"]
+        })
+ 
+    return
 
-def download_product_images(browser: WebDriver, product_name: str) -> None:
+def download_all_images(browser: WebDriver, product_name: str) -> List[str]:
     """
     Get and download all images from product webpage
     """
-    log.info("Downloading product images...")
+    logging.info(f"Downloading images for product {product_name}...")
     
     # Getting images
     images: List[WebElement] = wait_for_all_elements(browser, By.XPATH, "//img")
+    product_images_dir = os.path.join(__location__, r"generated\images", product_name)
 
     # Creating directory with name of product only if it doesnt already exists
     try:
-        os.mkdir(product_name) 
-    except FileExistsError :
+        os.mkdir(product_images_dir)
+    except FileExistsError:
         pass
 
+    downloaded_images = []
+    ignored_images = []
     for image in images:
         image_src = image.get_attribute("src")
+        
+        if not image_src:
+            log.warning(f"Couldn't download image {image_src}.")
+            continue 
 
-        # Get new string containing the text that comes after last slash of image_src
-        image_local_name = re.findall(r"\/([^\/]*)$", image_src)[0]
-        image_local_name = os.path.join(f"./generated/images/{image_local_name}/", image_src)
+        # Ignore image in case it ends with .svg
+        if re.findall(r"\.svg\s*$", image_src):
+            ignored_images.append(image_src)
+            continue
 
-        # Downloadinbg image
-        path, response = urllib.request.urlretrieve(image_src, image_local_name)
+        # Get string containing the text that comes after last slash of image_src
+        try:
+            regexed = re.findall(r"\/([^\/]*)$", image_src)[0]
+        except IndexError:
+            log.warning(f"Couldn't match regex pattern for {image_src}")
+            continue
+
+        image_name = os.path.join(product_images_dir, regexed)
+
+        # Downloading image
+        path, _ = urllib.request.urlretrieve(image_src, image_name)
         
         if not path:
-            log.warning(f"Image [{image_src}] couldn't be downloaded.")
+            logging.warning(f"Image [{image_src}] couldn't be downloaded.")
+
+        downloaded_images.append(path)    
+
+    logging.info(f"Succesfully downloaded the images: {json.dumps(downloaded_images, indent=4)}")
+    logging.info(f"Ingnored images: {json.dumps(ignored_images, indent=4)}")
+
+    return downloaded_images
 
 
-def parse_product_uses(browser: WebDriver):
+
+def normalize_product(product: Product) -> NormalizedProduct:
     """
-    Parse the product utilization information
-    """ 
-    log.info(f"Parsing product utilization information from product webpage: {browser.current_url}")
-
-    utilization_box: Uses = {
-        "uses_title": {
-            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/h3[1]/span',
-            "text": ""
-        },
-        "uses": {
-            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[1]/ul',
-            "text": ""
-        },
-        "instructions_title": {
-            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/h3[2]/span',
-            "text": ""
-        },
-        "instructions": {
-            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[2]/div/div[2]/span',
-            "text": ""
-        },
-        "cautions_title": {
-            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[3]/h3/span',
-            "text": ""
-        },
-        "cautions": {
-            "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[3]/div/p/span',
-            "text": ""
-        },
-    }
-
-    new_utilization_box = parser_helper(browser, utilization_box)
-    return new_utilization_box
-
-def parse_product_ingredients(browser: WebDriver):
+    Normalize product and fields according to clients specifications of generated CSV
     """
-    Parse the product ingredients information
-    """
-    log.info(f"Parsing ingredients information from product webpage: {browser.current_url}")
-
-    ingredients_box: Ingredients = {
-        "ingredients_title": {
-            "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/h3/span',
-            "text": ""
-        },
-        "ingredients": {
-            "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
-            "text": ""
-        }
-    }
-
-    new_ingredients_box = parser_helper(browser, ingredients_box)
-    return new_ingredients_box
-
-def parse_product_benefits(browser: WebDriver):
-    """
-    Parse the product benefits information
-    """
-
-    benefits_box: Benefits = {
-        "benefits_title": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
-            "text": ""
-        },
-        "benefits": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
-            "text": ""
-        }
-    }
-
-    new_benefits_box = parser_helper(browser, benefits_box)
-    return new_benefits_box
+    def normalizer(text: Union[str, List[str]], title: str = ''):
+        """
+        Join strs and lists of strs in single strings applying some regex also  
+        """
+        # Removing leading and trailing spaces/single-quotes/double-quotes of title
+        exp = r"^([\s\'\"]*)|([\s\'\"]*)$"
+        regexed = ""
         
-def parse_product_information(browser: WebDriver):
-    """
-    Parse the product main information
-    """
-    log.info(f"Parsing main information from product webpage: {browser.current_url}")
+        if title:
+            regexed += re.sub(exp, r"", title)
+            regexed += '\n'
 
-    information_box: Information = {
-        "product_name": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/h3/span',
-            "text": ""
-        },
-        "description": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/div[1]/p/span',
-            "text": ""
-        },
-        "dimensions": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[1]/div/div[2]/span',
-            "text": ""
-        },
-        "item_id": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[2]/div/div[2]',
-            "text": ""
-        },
-        "retail_price": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
-            "text": ""
-        },
-        "discount_price": {
-            "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
-            "text": ""
-        }
+        if isinstance(text, str):
+            # Removing leading and trailing spaces/single-quotes/double-quotes of text
+            regexed += re.sub(exp, r"", text)
+        elif isinstance(text, list):
+            # Joining all itens of list of strings on a single string
+            regexed += ''.join('\n' + re.sub(exp, r"", i) for i in text)
+        else:
+            log.error("Hit a never type.")
+            raise TypeError("Hit a never type.")
+
+        return regexed
+
+    benefits = normalizer(
+        product["benefits"]["benefits"]["text"], 
+        title=product["benefits"]["benefits_title"]["text"]
+    )
+    ingredients = normalizer(
+        product["ingredients"]["ingredients"]["text"], 
+        title=product["ingredients"]["ingredients_title"]["text"]
+    )
+    uses_uses = normalizer(
+        product["uses"]["uses"]["text"], 
+        title=product["uses"]["uses_title"]["text"]
+    )
+    uses_instructions = normalizer(
+        product["uses"]["instructions"]["text"], 
+        title=product["uses"]["instructions_title"]["text"]
+    )
+    uses_cautions = normalizer(
+        product["uses"]["cautions"]["text"], 
+        title=product["uses"]["cautions_title"]["text"]
+    )
+
+    normalized_product: NormalizedProduct = {
+        "product_name": normalizer(product["information"]["product_name"]["text"]),
+        "item_id": normalizer(product["information"]["item_id"]["text"]),
+        "retail_price": normalizer(product["information"]["retail_price"]["text"]),
+        "discount_price": normalizer(product["information"]["discount_price"]["text"]),
+        "description": normalizer([benefits, ingredients, uses_uses, uses_instructions, uses_cautions])
     }
 
-    new_information_box = parser_helper(browser, information_box)
-    return new_information_box
-    
-def parse_product(browser: WebDriver) -> Product:
-    """
-    Parse all product information and images from product page
-    """
-    log.info(f"Parsing information from product webpage: {browser.current_url}")
-    
-    information_box = parse_product_information(browser)
-    benefits_box = parse_product_benefits(browser)
-    ingredients_box = parse_product_ingredients(browser)
-    uses_box = parse_product_uses(browser)
-    
-    status = download_product_images(browser, information_box["product_name"])
+    log.info(f"Normalized product to: \n{json.dumps(normalized_product, indent=4)}")
 
+    return normalized_product
+
+def validate_product(product: Union[dict, Product]) -> bool:
+    """
+    Recursiverly going nested on dicts of dicts to validate no field is empty
+    """
+    for value in product.values():
+        if isinstance(value, dict):
+            validate_product(value)
+        if not value:
+            log.error(f"Product dictionary has empty fields.")
+            raise ValueError
+    
+    return True
+
+def parse_product_text(browser: WebDriver) -> Product:
+    """
+    Parse all product information and images from individual product page
+    """
+    # Cool Generics action
+    T = TypeVar('T', Information, Benefits, Ingredients, Uses)
+
+    def parser(browser: WebDriver, elements_box: T) -> T:
+        """
+        Help parsing the product page
+        """
+        logging.info(f"Entered the parser helper for...")
+
+        for element_name in elements_box.keys():
+            element_dict: dict = elements_box[element_name]
+            element: WebElement = wait_for_element(browser, By.XPATH, element_dict["xpath"], TIMEOUT)
+
+            if element.tag_name == "ul":
+                lis = element.find_elements(By.XPATH, "./li")
+                element_text_list = [li.text + '\n' for li in lis]
+                elements_box[element_name]["text"] = element_text_list
+            else:
+                elements_box[element_name]["text"] = element.text
+        
+        logging.info(f"Parsed product: {json.dumps(elements_box, indent=4)}")
+
+        return elements_box
+
+    # Parsing information
+    logging.info(f"Parsing information from product webpage: {browser.current_url}")
+    
+    information_box: Information = parser(browser, INFORMATION)
+    benefits_box: Benefits = parser(browser, BENEFITS)
+    ingredients_box: Ingredients = parser(browser, INGREDIENTS)
+    uses_box: Uses = parser(browser, UTILIZATION)
+
+    # Assemblying the Megazord
     product: Product = { 
         "information": information_box,
         "benefits": benefits_box,
@@ -293,110 +248,179 @@ def parse_product(browser: WebDriver) -> Product:
         "uses": uses_box
     }
 
+    # Recursiverly nested. Sounds cool huh?
+    validate_product(product)
+
     return product
 
-def process_products_page(browser: WebDriver):
+def process_product_page(browser: WebDriver) -> bool:
     """
-    Handle all the products present on subcategory products page
+    Process the product page
     """
-    log.info("Processing products page...")
-    
-    # ============================== Scrolando para baixo para carregar os produtos ============================== 
-    # Get scroll height
-    original_height = browser.execute_script("return document.body.scrollHeight")
+    # Sorry, is it Python or C?
+    try:
+        # Parsing products
+        parsed_product: Product = parse_product_text(browser)
 
+        # Normalizing products
+        normalized_product: NormalizedProduct = normalize_product(parsed_product)
+
+        # Downloading images
+        download_all_images(browser, normalized_product["product_name"])
+
+        # Writing CSV
+        write_csv(normalized_product)
+
+        return True
+    
+    except SystemExit:
+        raise SystemExit
+
+def handle_subcategory_page(browser: WebDriver, subcategory_address: str) -> bool:
+    """
+    Handle all the products present on products page / subcategory page
+    """
+    logging.info(f"Processing products page '{subcategory_address}'...")
+    products: List[WebElement]
+
+    products_div_xpath = '//*[@id="categoryitemgrid"]'
+    products_div: WebElement = wait_for_element(browser, By.XPATH, products_div_xpath)
+    
+    # ============================== Scrolling down to last visible product to load the products ============================== 
     while True:
-        # Scroll down to bottom
-        browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        products: List[WebElement] = wait_for_all_elements(products_div, By.XPATH, "./div/a")
+
+        last_product: WebElement = products[-1]
+        last_scroll_height = browser.execute_script("return document.body.scrollHeight")
+
+        # Javascript expression to scroll to a particular element
+        # arguments[0] refers to the first argument that is later passed
+        # in to execute_script method
+        browser.execute_script("arguments[0].scrollIntoView();", last_product)   
 
         # Wait to load page
         time.sleep(SCROLL_PAUSE_DELAY)
 
-        # Calculate new scroll height and compare with last scroll height
-        new_height = browser.execute_script("return document.body.scrollHeight")
-
-        if original_height == new_height:
+        # Calculate new scroll height and compare with original scroll height
+        new_scroll_height = browser.execute_script("return document.body.scrollHeight")
+        if last_scroll_height == new_scroll_height:
+            log.info(f"Found {len(products)} total products on the '{subcategory_address}' page.")
             break
 
-    # ============================== Clicando nos produtos ==============================
-    browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        log.info(f"Scrolled {new_scroll_height - last_scroll_height} pixels down to last visible product.")
 
-    products_div_xpath = '//*[@id="categoryitemgrid"]'
-    products_div: WebElement = wait_for_element(browser, By.XPATH, products_div_xpath)
-    products: List[WebElement] = wait_for_all_elements(products_div, By.XPATH, "./div/a")
-    
-    # TODO: criar logica async para parsear a pagina de produtos
+    # ============================== Clicking products ==============================
+    # The most important loop you'll see today
     for product in products:
-        product.click()
-        parse_product(browser)
+        product_name = product.text
+        product_address = join_strings([subcategory_address, product_name])        
 
-def handle_hover_menu(browser: WebDriver):
+        if product_address not in PRODUCTS_BUFF:
+            try:
+                # Getting to product page
+                product.click()
+                process_product_page(browser)
+                PRODUCTS_BUFF.append(product_address)
+                log.info(f"PRODUCTS_BUFF: {json.dumps(PRODUCTS_BUFF, indent=4)}")
+
+            except Exception:
+                log.warning(f"Unhandled exception while trying to parse product '{product.text}': {traceback.format_exc}")
+                log.warning(f"Continuing to next product...")
+                continue
+
+    return True
+
+def handle_hover_menu(browser: WebDriver) -> bool:
     """
-    Handles interaction with hover type menu to get the categories, then the subcategories, then the products
+    Handles interaction with hover type menu to get the categories, then the subcategories, then click it 
     """
-    try:
-        log.info("Handling hover menu 'COMPRAR'")
-        # ===================================== Passando o mouse no botão "comprar" =====================================
-        comprar_btn_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/a/span'
-        hover_over(browser, comprar_btn_xpath)
+    # Verbose will only be allowed for first execution of the function
+    # Remember that the function applies recursion
+    if not SUBCATEGORIES_BUFF:
+        verbose = True
+        log.info("Handling hover menu...")
+    else:
+        verbose = True
+        log.info("Entered recursion...")
 
-        # ===================================== Passando o mouse nas diferentes categorias =====================================
-        categories_div_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/div/div/div/div/div/div[2]/div/ul'
-        categories_div: WebElement = wait_for_element(browser, By.XPATH, categories_div_xpath)
-        categories_lis: List[WebElement] = wait_for_all_elements(categories_div, By.XPATH, "./li") # "lis" stands for "List ItemS" 
+    # ===================================== Hovering mouse over "comprar" button =====================================
+    comprar_btn_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/a/span'
+    hover_over(browser, comprar_btn_xpath, verbose=verbose)
 
-        for category_li in categories_lis:
-            if category_li.text in CONTEXT_CATEGORIES:
-                hover_over(browser, category_li)
-                subcategories_lis: list[WebElement] = category_li.find_elements(By.XPATH, "./ul/li")
+    # ===================================== Hovering mouse over the context categoriies =====================================
+    categories_div_xpath = '//*[@id="header"]/div[4]/div/div/div/div[2]/nav/ul/li[1]/div/div/div/div/div/div[2]/div/ul'
+    categories_div: WebElement = wait_for_element(browser, By.XPATH, categories_div_xpath)
+    categories_lis: List[WebElement] = wait_for_all_elements(categories_div, By.XPATH, "./li") # "lis" stands for "List ItemS" 
 
-                for subcategory_li in subcategories_lis:
-                    # ===================================== Passando o mouse nas subcategorias de cada categorias =====================================
-                    if subcategory_li.text:
-                        subcategory_full_name = category_li.text + "." + subcategory_li.text
-                        
-                        # TODO: implementar logica async (provavelmente) para processar a pagina da subcategoria de produtos
-                        if not subcategory_full_name in OPENED_SUBCATEGORIES:
-                            OPENED_SUBCATEGORIES.append(subcategory_full_name)
-                            subcategory_li.click()
+    for category_li in categories_lis:
+        category_name = category_li.text
 
-                            # Chama a funcao pra parsear a pagina da subcategoria atual
-                            process_products_page(browser)
+        if category_name in CONTEXT_CATEGORIES:
+            hover_over(browser, category_li, verbose=verbose)
+            subcategories_lis: list[WebElement] = category_li.find_elements(By.XPATH, "./ul/li")
 
-                            # Aplicando recursao
-                            handle_hover_menu(browser)
-                    else:
-                        # If subcategory_li.text is empty then skip it
-                        continue
+            for subcategory_li in subcategories_lis:
+                subcategory_name = subcategory_li.text
+                
+                # ===================================== Hovering mouse over all the subcategories of given category =====================================
+                if subcategory_li.text:
+                    subcategory_address = join_strings([category_name, subcategory_name]) 
+                
+                    if not subcategory_address in SUBCATEGORIES_BUFF:
+                        # Parsing the given product page
+                        subcategory_li.click()
+                        handle_subcategory_page(browser, subcategory_address)
+                        SUBCATEGORIES_BUFF.append(subcategory_address)
+                        log.info(f"Added value to SUBCATEGORIES_BUFF: {json.dumps(SUBCATEGORIES_BUFF, indent=4)}")
 
-    except ZeroDivisionError:
-        pass
+                        # A little bit of recursion
+                        handle_hover_menu(browser)
     
+    log.info(f"{SUBCATEGORIES_BUFF} subcategories parsed.")
+    return True
+
 @kill_edge
-def main():
+def main() -> bool:
     """
     Another main function
     """
-    log.info("Starting script...")
+    logging.info("Starting the scraper...")
 
     try:
-        browser = get_browser(OPTIONS)
-        browser.implicitly_wait(30)  # Timeout
+        driver_path = os.path.join(__location__, r"components\msedgedriver.exe")
+        driver_options = [
+            # "--user-data-dir=C:\\Users\\anewe\\AppData\\Local\\Microsoft\\Edge\\User Data",
+            # "--headless",
+            "--inprivate",
+            "--start-maximized",
+            "--disable-extensions",
+            "--remote-debugging-port=9222"
+        ]
 
-        # OBS: necessário entrar no VPN de portugal porque o Edge redireciona pro site BR que é diferente
-        browser.get(URL)
+        browser = get_browser(driver_path, driver_options, TIMEOUT, zoom=70)
+        browser.implicitly_wait(TIMEOUT)
+
+        # OBS: necessery to be connected to Portugal's VPN
+        url = "https://shop.doterra.com/PT/pt_PT/shop/home/"
+        browser.get(url)
         browser = accept_bloody_cookie(browser)
+
+        # Cleaning generated output csv file
+        with open(GENERATED_CSV_FILE, "w"):
+            pass
+        
+        # Starting the fun
         handle_hover_menu(browser)
 
         return True
     
-    except ZeroDivisionError:
-        pass
     except SystemExit:
+        log.info("Finishing application...")
         raise SystemExit
     except Exception:
-        log.error(f"Unhandled error: {traceback.format_exc()}")
-        return False
+        logging.critical(f"Unhandled error: {traceback.format_exc()}")
+        raise SystemExit
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
