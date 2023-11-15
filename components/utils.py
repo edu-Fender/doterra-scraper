@@ -5,7 +5,7 @@ import json
 import logging
 import urllib.request
 
-from typing import List, Union
+from typing import Dict, List, Union
 from pathlib import Path
 
 from selenium import webdriver
@@ -29,16 +29,43 @@ __parentpath__ = os.path.realpath(os.path.abspath('.'))
 TIMEOUT: float = 5
 
 
-def get_logger(file_path: Union[str, Path]) -> logging.Logger:
-    logging.basicConfig(
-        handlers=[logging.FileHandler(file_path, 'w+', 'latin-1')],
-        format=u"%(asctime)s - %(levelname)s: %(message)s",
-        datefmt="%d-%m-%Y %H:%M:%S",
-        level=logging.INFO
-    )
-    log = logging.getLogger("scraper")
+######################################## General Helpers ########################################
+def get_logger(logpath: Union[str, Path]) -> logging.Logger:
+    """
+    Getting logger
+    Why is logging so frustrating??
+    """
+    fmt = "%(asctime)s - %(levelname)s: %(message)s"
+    datefmt = "%d-%m-%Y %H:%M:%S"
+
+    log = logging.getLogger(__name__)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setStream(sys.stdout)
+    stream_handler.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler(logpath, mode='w', encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
+    file_handler.setLevel(logging.INFO)
+
+    log.addHandler(stream_handler)
+    log.addHandler(file_handler)
+    log.setLevel(logging.INFO)
+
     return log
 
+
+def join_strings(strings: List[str]):
+    """
+    Join incoming strings
+    """
+    sep = ' -> '
+    joined = sep.join(strings)
+
+    return joined
+
+
+######################################## Selenium Helpers ########################################
 def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom: float = 100) -> WebDriver:
     """
     Will get then return the Selenium driver
@@ -58,23 +85,6 @@ def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom:
 
     return browser
 
-def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
-    """
-    Accept bloody cookie
-    """
-    try:
-        logging.info("Accepting bloody cookie...")
-        accept_cookie_btn_xpath = '//*[@id="truste-consent-button"]'
-        WebDriverWait(browser, 10).until(
-            EC.visibility_of_element_located ((
-                By.XPATH, accept_cookie_btn_xpath))).click()
-        
-        return browser
-    
-    # For some reason sadly Python wont catch TimeoutException in this case
-    except:
-        logging.error("Error, couldn't accept bloody cookie")
-        raise SystemExit
 
 def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], timeout: float = 5, verbose: bool = False) -> bool:
     """
@@ -86,8 +96,7 @@ def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], 
     elif isinstance(xpath_or_webelement, WebElement):
         webelement = xpath_or_webelement
     else:
-        logging.error("Hit a never type.")
-        raise SystemExit
+        raise SystemExit("Hit a never type.")
 
     logging.info(f"Hovering over element {webelement.text}") if verbose else None
     hover = ActionChains(browser).move_to_element(webelement)
@@ -95,6 +104,7 @@ def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], 
 
     return True
  
+
 def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: float = 5):
     """
     Helper function to wait for visibility of element located then grab it
@@ -105,6 +115,7 @@ def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direct
             by_what, direction)))
     
     return element
+
 
 def wait_for_all_elements(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: float = 5) -> List[WebElement]:
     """
@@ -121,29 +132,26 @@ def wait_for_all_elements(browser: Union[WebDriver, WebElement], by_what: str, d
 
     return elements
 
-def download_image(browser: WebDriver, xpath: str, product_name: str) -> str:
+
+def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
     """
-    Helper to make download of images easier
+    Accept bloody cookie
     """
-    element = browser.find_element(
-        By.XPATH,
-        xpath
-    )
+    try:
+        logging.info("Accepting bloody cookie...")
+        accept_cookie_btn_xpath = '//*[@id="truste-consent-button"]'
+        WebDriverWait(browser, 10).until(
+            EC.visibility_of_element_located ((
+                By.XPATH, accept_cookie_btn_xpath))).click()
+        
+        return browser
+    
+    # For some reason Python sadly wont catch TimeoutException
+    except:
+        raise SystemExit("Error, couldn't accept bloody cookie.")
 
-    img_src = element.get_attribute("src")
-    path, _ = urllib.request.urlretrieve(img_src, os.path.join(__parentpath__, "images", f"{product_name}.png"))
 
-    return path
-
-def join_strings(strings: List[str]):
-    """
-    Join incoming strings based on given separator
-    """
-    sep = ' -> '
-    joined = sep.join(strings)
-
-    return joined
-
+######################################## Decorator Helpers ########################################
 def kill_edge(func):
     """
     Decorator that will terminate Edge processes with each code execution.
@@ -162,5 +170,5 @@ def kill_edge(func):
             for cmd in cmds:
                 logging.debug(f"Sending command: {cmd}")
                 os.system(cmd)
-
+        
     return decorator.decorator(wrapper, func)
