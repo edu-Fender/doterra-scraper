@@ -6,76 +6,88 @@ from components.models import Information, Benefits, Ingredients, Uses, CSVHeade
 
 INFORMATION: Information = {
     "product_name": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/h3/span',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/h3/span',
+        "css_selector": ".spotlight__head-title",
         "text": ""
     },
     "description": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/div[1]/p/span',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[1]/div[1]/p/span',
+        "css_selector": ".spotlight__head-copy",
         "text": ""
     },
     "dimensions": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[1]/div/div[2]/span',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[1]/div/div[2]/span',
+        "css_selector": ".loyalty-order__row .loyalty-order__row-item-data--bold",
         "text": ""
     },
     "item_id": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[2]/div/div[2]',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[2]/div[2]/div/div[2]',
+        "css_selector": ".loyalty-order__row .loyalty-order__row-item-data--bold",
         "text": ""
     },
     "retail_price": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
+        "css_selector": ".loyalty-order__row--wholesale .loyalty-order__row-item .loyalty-order__row-item-data",
         "text": ""
     },
     "discount_price": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[1]/div/div/div[3]/div/div[3]/div[1]/div/div[2]',
+        "css_selector": ".loyalty-order__row-item-data-wicon",
         "text": ""
     }
 }
 
 BENEFITS: Benefits = {
     "benefits_title": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
+        "css_selector": ".spotlight__foot-block-title",
+        "css_selector_sec": ".product-whats-inside--alt .product-whats-inside__info-list-item-title",
         "text": ""
     },
     "benefits": {
-        "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
+        # "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
+        "css_selector": 'ul.spotlight__list-custom.custom-list',
         "text": [""]
     }
 }
 
 INGREDIENTS: Ingredients = {
     "ingredients_title": {
-        "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/h3/span',
+        # "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/h3/span',
+        "css_selector": ".product-whats-inside__footer-title",
+        "css_selector_sec": ".product-whats-inside__title",
         "text": ""
     },
     "ingredients": {
-        "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
+        # "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
+        "css_selector": ".product-whats-inside__footer-content, .product-whats-inside__footer-content p",
         "text": ""
     }
 }
 
-UTILIZATION: Uses = {
+USES: Uses = {
     "uses_title": {
-        "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/h3[1]/span',
+        "css_selector": "h3.product-uses__block-title",
         "text": ""
     },
     "uses": {
-        "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[1]/ul',
+        "css_selector": 'div.product-uses__block-list',
         "text": [""]
     },
     "instructions_title": {
-        "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/h3[2]/span',
+        "css_selector": "h3.product-uses__block-title",
         "text": ""
     },
     "instructions": {
-        "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[2]/div/div[2]/span',
+        "css_selector": "div.product-uses__directions-for-use-copy",
         "text": ""
     },
     "cautions_title": {
-        "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[3]/h3/span',
+        "css_selector": "h3.product-uses__block-title",
         "text": ""
     },
     "cautions": {
-        "xpath": '//*[@id="ProductUsesSection"]/div[1]/div/div[2]/div[3]/div/p/span',
+        "css_selector": "div.product-uses__cautions-body",
         "text": ""
     }
 }

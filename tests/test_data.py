@@ -1,6 +1,24 @@
 # -*- coding: utf-8 -*-
 from components.models import NormalizedProduct, Product
 
+PRODUCTS_URLS = [
+    "https://shop.doterra.com/PT/pt_PT/shop/daily-nutrient-pack/",
+    "https://shop.doterra.com/PT/pt_PT/shop/hydrating-cream/",
+    "https://shop.doterra.com/PT/pt_PT/shop/doterra-sun-face-body-mineral-sunscreen-lotion/",
+    "https://shop.doterra.com/PT/pt_PT/shop/moisturising-bath-bar/",
+    "https://shop.doterra.com/PT/pt_PT/shop/doterra-hd-clear-foaming-face-wash/"
+    "https://shop.doterra.com/PT/pt_PT/shop/doterra-daily-conditioner/",
+    "https://shop.doterra.com/PT/pt_PT/shop/verage-skin-care-collection/",
+    "https://shop.doterra.com/PT/pt_PT/shop/deep-blue-rub-samples/",
+    "https://shop.doterra.com/PT/pt_PT/shop/metapwr-beadlets/",
+    "https://shop.doterra.com/PT/pt_PT/shop/alpha-crs-plus/",
+    "https://shop.doterra.com/PT/pt_PT/shop/deep-blue-polyphenol-complex/",
+    "https://shop.doterra.com/PT/pt_PT/shop/phytoestrogen-essential-complex/",
+    "https://shop.doterra.com/PT/pt_PT/shop/zengest-softgels/",
+    "https://shop.doterra.com/PT/pt_PT/shop/metapwr-beadlets/"
+]
+
+
 VALID_PRODUCT: Product = { 
     "information": {
         "product_name": {

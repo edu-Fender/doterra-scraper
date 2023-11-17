@@ -1,27 +1,30 @@
 # -*- coding: utf-8 -*-
+import logging
 import os
 import os
 import sys
 import csv
 import timeit
-from unittest import mock
 import pytest
 
-from typing import List, Union
+from typing import List, Tuple, Union
+from logging import handlers
+from unittest import mock
+from datetime import datetime
 from unittest.mock import patch
 
 from selenium.webdriver.edge.webdriver import WebDriver
 
 import scraper
-
-from components.utils import join_strings, kill_edge
+from components.utils import get_browser, get_address, get_logger, kill_edge
 from components.models import NormalizedProduct, Product
-from tests.test_data import VALID_PRODUCT, VALID_FORMAT_EMPTY_FIELDS_PRODUCT, INVALID_FORMAT_PRODUCT, VALID_NORMALIZED_PRODUCT, VALID_FORMAT_EMPTY_FIELD_NORMALIZED_PRODUCT, INVALID_FORMAT_NORMALIZED_PRODUCT
+from tests.test_data import PRODUCTS_URLS, VALID_PRODUCT, VALID_FORMAT_EMPTY_FIELDS_PRODUCT, INVALID_FORMAT_PRODUCT, VALID_NORMALIZED_PRODUCT, VALID_FORMAT_EMPTY_FIELD_NORMALIZED_PRODUCT, INVALID_FORMAT_NORMALIZED_PRODUCT
 
 
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.parametrize("id, product", [
     (0, VALID_PRODUCT),
     (1, VALID_FORMAT_EMPTY_FIELDS_PRODUCT),
@@ -41,6 +44,7 @@ def test_validate_dict(id: int, product: Product):
             scraper.validate_dict(product)
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.parametrize("dict_", [
     (VALID_PRODUCT)
 ])
@@ -70,6 +74,7 @@ def test_validate_dict_teimeit(dict_: Product):
     pass
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.parametrize("normalized_product", [
     (VALID_NORMALIZED_PRODUCT),
     (VALID_FORMAT_EMPTY_FIELD_NORMALIZED_PRODUCT),
@@ -91,10 +96,10 @@ def test_write_csv(normalized_product: NormalizedProduct):
             assert len(lines) >= 2
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.parametrize("product_page_url", [
     ("https://shop.doterra.com/PT/pt_PT/shop/correctx/")
 ])
-@kill_edge
 def test_download_product_images(browser: WebDriver, product_page_url):
     """
     Testing download_product_images
@@ -108,6 +113,7 @@ def test_download_product_images(browser: WebDriver, product_page_url):
         assert os.path.isfile(i)
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.depends(on=['test_validate_dict'])
 @pytest.mark.parametrize("product", [
     (VALID_PRODUCT)
@@ -120,11 +126,52 @@ def test_normalize_product(product: Product):
     assert scraper.validate_dict(normalized_product)
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
+@pytest.mark.parametrize("product_page_url", PRODUCTS_URLS)
+def test_parse_information(browser: WebDriver, handlers: Tuple[logging.StreamHandler, logging.FileHandler], product_page_url: str):    
+    """
+    Testing parse product general information
+    """
+    browser.get(product_page_url)
+    assert scraper.validate_dict(scraper.parse_information(browser))
+
+
+@mock.patch("scraper.log.handlers", pytest.handlers)
+@pytest.mark.parametrize("product_page_url", PRODUCTS_URLS)
+def test_parse_benefits(browser: WebDriver, product_page_url: str):    
+    """
+    Testing parse_product
+    """
+    browser.get(product_page_url)
+    assert scraper.validate_dict(scraper.parse_benefits(browser))
+    
+
+
+@mock.patch("scraper.log.handlers", pytest.handlers)# @mock.patch("scraper.log.handlers[1].mode", get_logger(os.path.join(__location__, r"TEST_SCRAPER.log"), mode='a'))
+@pytest.mark.parametrize("product_page_url", PRODUCTS_URLS)
+def test_parse_ingredients(browser: WebDriver, product_page_url: str):    
+    """
+    Testing parse_product
+    """
+    browser.get(product_page_url)
+    assert scraper.validate_dict(scraper.parse_ingredients(browser))
+
+
+@mock.patch("scraper.log.handlers", pytest.handlers)
+@pytest.mark.parametrize("product_page_url", PRODUCTS_URLS)
+def test_parse_uses(browser: WebDriver, product_page_url: str):    
+    """
+    Testing parse product uses
+    """
+    browser.get(product_page_url)
+    assert scraper.validate_dict(scraper.parse_uses(browser))
+    
+
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.depends(on=['test_validate_dict'])
 @pytest.mark.parametrize("product_page_url", [
     ("https://shop.doterra.com/PT/pt_PT/shop/correctx/")
-])
-@kill_edge    
+])    
 def test_parse_product(browser: WebDriver, product_page_url):    
     """
     Testing parse_product
@@ -133,33 +180,23 @@ def test_parse_product(browser: WebDriver, product_page_url):
     assert scraper.parse_product(browser) 
 
 
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.depends(on=[
     test_parse_product,
     test_normalize_product,
     test_download_product_images,
     test_write_csv
 ])
-@pytest.mark.parametrize("product_page_urls", [
-    ([
-        "https://shop.doterra.com/PT/pt_PT/shop/correctx/",
-        "https://shop.doterra.com/PT/pt_PT/shop/daily-nutrient-pack/",
-        "https://shop.doterra.com/PT/pt_PT/shop/hydrating-cream/",
-        "https://shop.doterra.com/PT/pt_PT/shop/doterra-sun-face-body-mineral-sunscreen-lotion/",
-        "https://shop.doterra.com/PT/pt_PT/shop/metapwr-beadlets/"
-])])
-@kill_edge    
-def test_process_product_page(browser: WebDriver, product_page_urls: List[str]):    
+@pytest.mark.parametrize("product_page_url", PRODUCTS_URLS)    
+def test_process_product_page(browser: WebDriver, product_page_url: str):    
     """
     Testing parse_product
     """
-    for i in product_page_urls:
-        browser.get(i)
-        assert scraper.process_product_page(browser)
-
-    return
+    browser.get(product_page_url)
+    assert scraper.parse_product(browser)
 
 
-@kill_edge
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.parametrize("products_page_url, subcategory_address_list", [
     # Page with lots of product that need to be scrolled down to load the product
     (
@@ -179,12 +216,12 @@ def test_process_subcategory_page(browser: WebDriver, products_page_url: str, su
             patch("selenium.webdriver.remote.webelement.WebElement.click", autospec=True):
         
         browser.get(products_page_url)
-        subcategory_address = join_strings(subcategory_address_list)
+        subcategory_address = get_address(subcategory_address_list)
 
     assert scraper.process_subcategory_page(browser, subcategory_address)
 
 
-@kill_edge
+@mock.patch("scraper.log.handlers", pytest.handlers)
 @pytest.mark.parametrize("website_url", [
     ("https://shop.doterra.com/PT/pt_PT/shop/home/")
 
@@ -202,10 +239,9 @@ def test_handle_hover_menu(browser: WebDriver, website_url: str):
         browser.get(website_url)
     assert scraper.handle_hover_menu(browser)
 
-
-@kill_edge
 def test_main():
     """
     Testing main
     """
-    assert scraper.main()
+    with mock.patch("scraper.CONTEXT_PRODUCTS", ["Creme Hidratante", "Loção Solar Mineral Rosto + Corpo dōTERRA™ sun"]):
+        assert scraper.main()

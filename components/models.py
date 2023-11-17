@@ -6,38 +6,34 @@ from typing_extensions import NotRequired
 
 ############################## Product Base Classes ##############################
 class HTMLElement(TypedDict):
-    xpath: str
-    
-class HTMLNormalElement(HTMLElement):
-    text: str
-
-class HTMLBulletedElement(HTMLElement):
-    text: List[str]
+    css_selector: str
+    css_selector_sec: NotRequired[str]
+    text: Union[str, List[str]]
 
 ############################## Product Actual Clases ##############################
 class Information(TypedDict):
-    product_name: HTMLNormalElement
-    description: HTMLNormalElement
-    dimensions: HTMLNormalElement
-    item_id: HTMLNormalElement
-    retail_price: HTMLNormalElement
-    discount_price: HTMLNormalElement
+    product_name: HTMLElement
+    description: HTMLElement
+    dimensions: HTMLElement
+    item_id: HTMLElement
+    retail_price: HTMLElement
+    discount_price: HTMLElement
 
 class Benefits(TypedDict):
-    benefits_title: HTMLNormalElement
-    benefits: HTMLBulletedElement
+    benefits_title: HTMLElement
+    benefits: HTMLElement
 
 class Ingredients(TypedDict):
-    ingredients_title: HTMLNormalElement
-    ingredients: HTMLNormalElement
+    ingredients_title: HTMLElement
+    ingredients: HTMLElement
 
 class Uses(TypedDict):
-    uses_title: HTMLNormalElement
-    uses: HTMLBulletedElement
-    instructions_title: HTMLNormalElement
-    instructions: HTMLNormalElement
-    cautions_title: HTMLNormalElement
-    cautions: HTMLNormalElement
+    uses_title: HTMLElement
+    uses: HTMLElement
+    instructions_title: HTMLElement
+    instructions: HTMLElement
+    cautions_title: HTMLElement
+    cautions: HTMLElement
     
 # The Megazord
 class Product(TypedDict):

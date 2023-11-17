@@ -1,20 +1,19 @@
 import os
-import decorator
 import sys
 import json
 import logging
-import urllib.request
+import decorator
 
-from typing import Dict, List, Union
 from pathlib import Path
+from typing import Dict, List, Union
 
 from selenium import webdriver
 from selenium.webdriver import ActionChains
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.edge.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 
@@ -30,7 +29,7 @@ TIMEOUT: float = 5
 
 
 ######################################## General Helpers ########################################
-def get_logger(logpath: Union[str, Path]) -> logging.Logger:
+def get_logger(logpath: Union[str, Path], mode='w') -> logging.Logger:
     """
     Getting logger
     Why is logging so frustrating??
@@ -42,11 +41,8 @@ def get_logger(logpath: Union[str, Path]) -> logging.Logger:
 
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setStream(sys.stdout)
-    stream_handler.setLevel(logging.INFO)
-
-    file_handler = logging.FileHandler(logpath, mode='w', encoding='utf-8')
+    file_handler = logging.FileHandler(logpath, mode=mode, encoding='utf-8')
     file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
-    file_handler.setLevel(logging.INFO)
 
     log.addHandler(stream_handler)
     log.addHandler(file_handler)
@@ -55,9 +51,9 @@ def get_logger(logpath: Union[str, Path]) -> logging.Logger:
     return log
 
 
-def join_strings(strings: List[str]):
+def get_address(strings: List[str]):
     """
-    Join incoming strings
+    Join incoming strings to get the address
     """
     sep = ' -> '
     joined = sep.join(strings)
@@ -68,7 +64,7 @@ def join_strings(strings: List[str]):
 ######################################## Selenium Helpers ########################################
 def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom: float = 100) -> WebDriver:
     """
-    Will get then return the Selenium driver
+    Get then return the Selenium driver with given options
     """
     logging.info(f"Getting browser object with custom options: {json.dumps(options, indent=4)}")
     
@@ -82,6 +78,15 @@ def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom:
 
     # Very important, setting zoom
     browser.execute_script(f"document.body.style.zoom='{zoom}%';")
+
+    # Setting timeout
+    browser.implicitly_wait(TIMEOUT)
+
+    # OBS: necessary to be connected to Portugal's VPN
+    browser.get("https://shop.doterra.com/PT/pt_PT/shop/home/")
+
+    # Accepting bloody cookie
+    browser = accept_bloody_cookie(browser)
 
     return browser
 
@@ -108,8 +113,10 @@ def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], 
 def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: float = 5):
     """
     Helper function to wait for visibility of element located then grab it
+
     Note that 'browser' could be a WebDriver or a WebElement as both of then has find_element attribute
     """
+    wait_for_all_elements(browser, By.CSS_SELECTOR, ".loyalty-order__row .loyalty-order__row-item-data--bold")
     element = WebDriverWait(browser, timeout).until(
         EC.visibility_of_element_located ((
             by_what, direction)))
@@ -120,6 +127,7 @@ def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direct
 def wait_for_all_elements(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: float = 5) -> List[WebElement]:
     """
     Helper function to wait for visibility of all elements located then grab it
+
     Note that 'browser' could be a WebDriver or a WebElement as both of then has find_elements attribute
     """
     # Waiting until all images loaded
@@ -154,8 +162,8 @@ def accept_bloody_cookie(browser: WebDriver) -> WebDriver:
 ######################################## Decorator Helpers ########################################
 def kill_edge(func):
     """
-    Decorator that will terminate Edge processes with each code execution.
-    This is necessary because if there is an Edge process alive when Edge is opened by Selenium, Selenium will not work correctly
+    Decorator that will terminate Edge processes with each code execution
+    This is necessary because if there is some Edge process alive when Selenium starts, Selenium will not work properly
     """
     def wrapper(func, *args, **kwargs):
         try:
