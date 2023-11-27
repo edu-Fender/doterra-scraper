@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from codecs import ignore_errors
 import os
 import sys
 import json
@@ -25,7 +27,7 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 __parentpath__ = os.path.realpath(os.path.abspath('.'))
 
 # Standard timeout
-TIMEOUT: float = 5
+TIMEOUT = 5
 
 
 ######################################## General Helpers ########################################
@@ -37,13 +39,16 @@ def get_logger(logpath: Union[str, Path], mode='w') -> logging.Logger:
     fmt = "%(asctime)s - %(levelname)s: %(message)s"
     datefmt = "%d-%m-%Y %H:%M:%S"
 
-    log = logging.getLogger(__name__)
-
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setStream(sys.stdout)
+    stream_handler.setFormatter(logging.Formatter(fmt="%(message)s"))
+    stream_handler.setLevel(logging.INFO)
+
     file_handler = logging.FileHandler(logpath, mode=mode, encoding='utf-8')
     file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
+    file_handler.setLevel(logging.INFO)
 
+    log = logging.getLogger(__name__)
     log.addHandler(stream_handler)
     log.addHandler(file_handler)
     log.setLevel(logging.INFO)
@@ -61,8 +66,16 @@ def get_address(strings: List[str]):
     return joined
 
 
+def double_br_join(*args: str):
+    """
+    Helper for joining strings
+    """
+    joined = "\\n\\n".join([i for i in args if i])
+    return joined
+
+
 ######################################## Selenium Helpers ########################################
-def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom: float = 100) -> WebDriver:
+def get_browser(driver_path, options: List[str], timeout=TIMEOUT) -> WebDriver:
     """
     Get then return the Selenium driver with given options
     """
@@ -74,13 +87,9 @@ def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom:
     
     service = Service(driver_path)
     browser = webdriver.Edge(service=service, options=edge_options)
-    browser.implicitly_wait(timeout)
-
-    # Very important, setting zoom
-    browser.execute_script(f"document.body.style.zoom='{zoom}%';")
 
     # Setting timeout
-    browser.implicitly_wait(TIMEOUT)
+    # browser.implicitly_wait(TIMEOUT)
 
     # OBS: necessary to be connected to Portugal's VPN
     browser.get("https://shop.doterra.com/PT/pt_PT/shop/home/")
@@ -91,7 +100,7 @@ def get_browser(driver_path, options: List[str], timeout: float = TIMEOUT, zoom:
     return browser
 
 
-def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], timeout: float = 5, verbose: bool = False) -> bool:
+def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], timeout=TIMEOUT) -> bool:
     """
     Hover mouse pointer over HTML element
     """
@@ -103,40 +112,42 @@ def hover_over(browser: WebDriver, xpath_or_webelement: Union[str, WebElement], 
     else:
         raise SystemExit("Hit a never type.")
 
-    logging.info(f"Hovering over element {webelement.text}") if verbose else None
+    # logging.info(f"Hovering over element {webelement.text}")
     hover = ActionChains(browser).move_to_element(webelement)
     hover.perform()
 
     return True
- 
 
-def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: float = 5):
+
+def wait_for_element(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout=TIMEOUT) -> WebElement:
     """
     Helper function to wait for visibility of element located then grab it
 
     Note that 'browser' could be a WebDriver or a WebElement as both of then has find_element attribute
     """
-    wait_for_all_elements(browser, By.CSS_SELECTOR, ".loyalty-order__row .loyalty-order__row-item-data--bold")
     element = WebDriverWait(browser, timeout).until(
-        EC.visibility_of_element_located ((
+        EC.presence_of_element_located ((
             by_what, direction)))
     
     return element
 
 
-def wait_for_all_elements(browser: Union[WebDriver, WebElement], by_what: str, direction: str, timeout: float = 5) -> List[WebElement]:
+def wait_for_all_elements(browser_or_element: Union[WebDriver, WebElement], by_what: str, direction: str, timeout=TIMEOUT) -> List[WebElement]:
     """
     Helper function to wait for visibility of all elements located then grab it
 
-    Note that 'browser' could be a WebDriver or a WebElement as both of then has find_elements attribute
+    Note that 'browser_or_element' could be a WebDriver or a WebElement as both of then has find_elements attribute
     """
     # Waiting until all images loaded
-    WebDriverWait(browser, timeout).until(
+    WebDriverWait(browser_or_element, timeout).until(
         EC.presence_of_all_elements_located ((
             by_what, direction)))
     
+    # NOTE: Aways use visibility_of_all_elements_located is safer when compared to presence_of_all_elements_located
+    # But it doesnt seem to work when searchig for elements that are out of the visible browser_or_element area
+
     # Getting images
-    elements: List[WebElement] = browser.find_elements(by_what, direction)
+    elements: List[WebElement] = browser_or_element.find_elements(by_what, direction)
 
     return elements
 

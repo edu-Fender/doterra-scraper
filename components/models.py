@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 
 from typing import Any, List, NamedTuple, Optional, Sequence, Tuple, Dict, Literal, TypeVar, Union, TypedDict, Annotated
@@ -8,7 +9,7 @@ from typing_extensions import NotRequired
 class HTMLElement(TypedDict):
     css_selector: str
     css_selector_sec: NotRequired[str]
-    text: Union[str, List[str]]
+    text: str
 
 ############################## Product Actual Clases ##############################
 class Information(TypedDict):
@@ -48,7 +49,9 @@ class NormalizedProduct(TypedDict):
     item_id: str 
     retail_price: str
     discount_price: str
-    description: str
+    short_description: str
+    long_description: str
+    weight: str
 
 CSVHeader = List[Literal[
     "ID do produto",
@@ -147,7 +150,9 @@ CSVHeader = List[Literal[
 CSVRequiredFields = TypedDict('CSVRequiredFields', {
     "ID do produto": str,
     "Nome": str,
+    "Resumo": str,
     "DescriÃ§Ã£o": str,
     "PreÃ§o (imposto incluÃ­do)": str,
-    "PreÃ§o de custo (atacado)": str
+    "PreÃ§o de custo (atacado)": str,
+    "Peso": str
 })

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
-
 from components.models import Information, Benefits, Ingredients, Uses, CSVHeader
+
 
 INFORMATION: Information = {
     "product_name": {
@@ -37,19 +35,20 @@ INFORMATION: Information = {
     }
 }
 
+
 BENEFITS: Benefits = {
     "benefits_title": {
         # "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/h3/span',
         "css_selector": ".spotlight__foot-block-title",
-        "css_selector_sec": ".product-whats-inside--alt .product-whats-inside__info-list-item-title",
         "text": ""
     },
     "benefits": {
         # "xpath": '//*[@id="ProductSpotlightSection"]/div[3]/div[2]/div/div/div/ul',
         "css_selector": 'ul.spotlight__list-custom.custom-list',
-        "text": [""]
+        "text": ""
     }
 }
+
 
 INGREDIENTS: Ingredients = {
     "ingredients_title": {
@@ -61,9 +60,11 @@ INGREDIENTS: Ingredients = {
     "ingredients": {
         # "xpath": '//*[@id="WhatsInsideSection"]/div/div[2]/div/div/p/span',
         "css_selector": ".product-whats-inside__footer-content, .product-whats-inside__footer-content p",
+        "css_selector_sec": ".product-whats-inside__info-list",
         "text": ""
     }
 }
+
 
 USES: Uses = {
     "uses_title": {
@@ -72,7 +73,7 @@ USES: Uses = {
     },
     "uses": {
         "css_selector": 'div.product-uses__block-list',
-        "text": [""]
+        "text": ""
     },
     "instructions_title": {
         "css_selector": "h3.product-uses__block-title",
@@ -91,6 +92,7 @@ USES: Uses = {
         "text": ""
     }
 }
+
 
 CSVHEADER: CSVHeader = [
     "ID do produto",

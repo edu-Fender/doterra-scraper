@@ -15,9 +15,25 @@ PRODUCTS_URLS = [
     "https://shop.doterra.com/PT/pt_PT/shop/deep-blue-polyphenol-complex/",
     "https://shop.doterra.com/PT/pt_PT/shop/phytoestrogen-essential-complex/",
     "https://shop.doterra.com/PT/pt_PT/shop/zengest-softgels/",
-    "https://shop.doterra.com/PT/pt_PT/shop/metapwr-beadlets/"
+    "https://shop.doterra.com/PT/pt_PT/shop/metapwr-beadlets/",
+    "https://shop.doterra.com/PT/pt_PT/shop/hair-care-refillable-mini-travel-kit/",
+    "https://shop.doterra.com/PT/pt_PT/shop/customisable-skin-care-kit/",
+    "https://shop.doterra.com/PT/pt_PT/shop/cleanse-renew-kit/"
 ]
 
+SUBCATEGORIES_URLS = [
+    "https://shop.doterra.com/PT/pt_PT/shop/single-oils",
+    "https://shop.doterra.com/PT/pt_PT/shop/proprietary-blends",
+    "https://shop.doterra.com/PT/pt_PT/shop/air-brand",
+    "https://shop.doterra.com/PT/pt_PT/shop/deep-blue-brand",
+    "https://shop.doterra.com/PT/pt_PT/shop/on-guard-brand",
+    "https://shop.doterra.com/PT/pt_PT/shop/daily-vitality",
+    "https://shop.doterra.com/PT/pt_PT/shop/specialised-supplements",
+    "https://shop.doterra.com/PT/pt_PT/shop/women",
+    "https://shop.doterra.com/PT/pt_PT/shop/zengest-brand",
+    "https://shop.doterra.com/PT/pt_PT/shop/roll-on-essentials",
+    "https://shop.doterra.com/PT/pt_PT/shop/metapwr-brand"
+]
 
 VALID_PRODUCT: Product = { 
     "information": {
